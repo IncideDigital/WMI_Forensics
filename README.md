@@ -1,3 +1,10 @@
+
+
+The purpose of this fork is to adapt it to python3.
+*This is an unmaintained version although any contribution to resolve bugs is welcome.*
+
+----------------------------------------------------------
+
 # WMI_Forensics
 This repository contains scripts used to find evidence in WMI repositories, specifically OBJECTS.DATA files located at:
 

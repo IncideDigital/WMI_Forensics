@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # 
 # PyWMIPersistenceFinder.py
 # Version 1.1
@@ -81,8 +81,8 @@ from __future__ import print_function
 import sys
 import re
 import string
+from curses.ascii import isprint
 
-PRINTABLE_CHARS = set(string.printable)
 
 def main():
     """Main function for everything!"""
@@ -101,8 +101,8 @@ def main():
     lines_list.append(current_line)
 
     #Precompiled match objects to search each line with
-    event_consumer_mo = re.compile(r"([\w\_]*EventConsumer\.Name\=\")([\w\s]*)(\")")
-    event_filter_mo = re.compile(r"(_EventFilter\.Name\=\")([\w\s]*)(\")")
+    event_consumer_mo = re.compile(rb"([\w\_]*EventConsumer\.Name\=\")([\w\s]*)(\")")
+    event_filter_mo = re.compile(rb"(_EventFilter\.Name\=\")([\w\s]*)(\")")
 
     #Dictionaries that will store bindings, consumers, and filters
     bindings_dict = {}
@@ -112,10 +112,10 @@ def main():
     while current_line:
         # Join all the read lines together (should always be 4) to look for bindings spread over
         #   multiple lines that may have been one page
-        potential_page = " ".join(lines_list)
+        potential_page = b" ".join(lines_list)
 
         # Look for FilterToConsumerBindings
-        if "_FilterToConsumerBinding" in potential_page:
+        if b"_FilterToConsumerBinding" in potential_page:
             if (
                     re.search(event_consumer_mo, potential_page) and
                     re.search(event_filter_mo, potential_page)):
@@ -130,11 +130,11 @@ def main():
                     filter_dict[event_filter_name] = set()
 
                 #Give the binding a name and add it to the dict
-                binding_id = "{}-{}".format(event_consumer_name, event_filter_name)
+                binding_id = "{}-{}".format(event_consumer_name.decode(), event_filter_name.decode())
                 if binding_id not in bindings_dict:
                     bindings_dict[binding_id] = {
-                        "event_consumer_name":event_consumer_name,
-                        "event_filter_name":event_filter_name}
+                        "event_consumer_name": event_consumer_name.decode(),
+                        "event_filter_name": event_filter_name.decode()}
 
         # Increment lines and look again
         current_line = objects_file.readline()
@@ -158,53 +158,44 @@ def main():
     lines_list.append(current_line)
 
     while current_line:
-        potential_page = " ".join(lines_list).replace("\n", "")
+        potential_page = b" ".join(lines_list).replace(b"\n", b"")
 
         # Check each potential page for the consumers we are looking for
-        if "EventConsumer" in potential_page:
-            for event_consumer_name, event_consumer_details in consumer_dict.iteritems():
+        if b"EventConsumer" in potential_page:
+            for event_consumer_name, event_consumer_details in iter(consumer_dict.items()):
                 # Can't precompile regex because it is dynamically created with each consumer name
-                if "CommandLineEventConsumer" in potential_page:
-                    consumer_mo = re.compile("(CommandLineEventConsumer)(\x00\x00)(.*?)(\x00)(.*?)"
-                                             "({})(\x00\x00)?([^\x00]*)?"
-                                             .format(event_consumer_name))
+                if b"CommandLineEventConsumer" in potential_page:
+                    consumer_mo = re.compile(b"(CommandLineEventConsumer)(\x00\x00)(.*?)(\x00)(.*?)"
+                                             b"(" + event_consumer_name + b")(\x00\x00)?([^\x00]*)?")
                     consumer_match = re.search(consumer_mo, potential_page)
                     if consumer_match:
                         noisy_string = consumer_match.groups()[2]
-                        consumer_details = "\n\t\tConsumer Type: {}\n\t\tArguments:     {}".format(
-                            consumer_match.groups()[0],
-                            filter(lambda event_consumer_name: event_consumer_name in
-                                   PRINTABLE_CHARS, noisy_string))
+                        consumer_details = b"\n\t\tConsumer Type: " + consumer_match.groups()[0] + b"\n\t\tArguments:     " + ''.join(char for char in noisy_string.decode() if isprint(char)).encode()
                         if consumer_match.groups()[5]:
-                            consumer_details += "\n\t\tConsumer Name: {}".format(consumer_match.groups()[5])
+                            consumer_details += b"\n\t\tConsumer Name: " + consumer_match.groups()[5]
                         if consumer_match.groups()[7]:
-                            consumer_details += "\n\t\tOther:         {}".format(consumer_match.groups()[7])
+                            consumer_details += b"\n\t\tOther:         " + consumer_match.groups()[7]
                         consumer_dict[event_consumer_name].add(consumer_details)
 
                 else:
                     consumer_mo = re.compile(
-                        r"(\w*EventConsumer)(.*?)({})(\x00\x00)([^\x00]*)(\x00\x00)([^\x00]*)"
-                        .format(event_consumer_name))
+                        rb"(\w*EventConsumer)(.*?)(" + event_consumer_name +b")(\x00\x00)([^\x00]*)(\x00\x00)([^\x00]*)")
                     consumer_match = re.search(consumer_mo, potential_page)
                     if consumer_match:
-                        consumer_details = "{} ~ {} ~ {} ~ {}".format(
-                            consumer_match.groups()[0],
-                            consumer_match.groups()[2],
-                            consumer_match.groups()[4],
-                            consumer_match.groups()[6])
+                        consumer_details = consumer_match.groups()[0] + b" ~ " + consumer_match.groups()[2] + b" ~ " + consumer_match.groups()[4] + b" ~ " + consumer_match.groups()[6]
                         consumer_dict[event_consumer_name].add(consumer_details)
 
         # Check each potential page for the filters we are looking for
-        for event_filter_name, event_filter_details in filter_dict.iteritems():
+        for event_filter_name, event_filter_details in iter(filter_dict.items()):
             if event_filter_name in potential_page:
                 # Can't precompile regex because it is dynamically created with each filter name
                 filter_mo = re.compile(
-                    r"({})(\x00\x00)([^\x00]*)(\x00\x00)".format(event_filter_name))
+                    rb"(" + event_filter_name + b")(\x00\x00)([^\x00]*)(\x00\x00)")
                 filter_match = re.search(filter_mo, potential_page)
                 if filter_match:
                     filter_details = "\n\t\tFilter name:  {}\n\t\tFilter Query: {}".format(
-                        filter_match.groups()[0],
-                        filter_match.groups()[2])
+                        filter_match.groups()[0].decode(),
+                        filter_match.groups()[2].decode())
                     filter_dict[event_filter_name].add(filter_details)
 
         current_line = objects_file.readline()
@@ -214,7 +205,8 @@ def main():
     
     # Print results to stdout. CSV will be in future version.
     print("\n    Bindings:\n")
-    for binding_name, binding_details in bindings_dict.iteritems():
+
+    for binding_name, binding_details in iter(bindings_dict.items()):
         if (
                 "BVTConsumer-BVTFilter" in binding_name or
                 "SCM Event Log Consumer-SCM Event Log Filter" in binding_name):
@@ -227,14 +219,14 @@ def main():
         event_consumer_name = binding_details["event_consumer_name"]
 
         # Print binding details if available
-        if consumer_dict[event_consumer_name]:
-            for event_consumer_details in consumer_dict[event_consumer_name]:
-                print("            Consumer: {}".format(event_consumer_details))
+        if consumer_dict[event_consumer_name.encode()]:
+            for event_consumer_details in consumer_dict[event_consumer_name.encode()]:
+                print("            Consumer: {}".format(event_consumer_details.decode()))
         else:
             print("            Consumer: {}".format(event_consumer_name))
 
         # Print details for each filter found for this filter name
-        for event_filter_details in filter_dict[event_filter_name]:
+        for event_filter_details in filter_dict[event_filter_name.encode()]:
             print("\n            Filter: {}".format(event_filter_details))
             print()
 
